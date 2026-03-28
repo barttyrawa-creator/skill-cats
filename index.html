@@ -447,6 +447,9 @@
         function createCat(color, pos) {
             const group = new THREE.Group();
             const mat = new THREE.MeshPhongMaterial({ color: color });
+            const whiteMat = new THREE.MeshPhongMaterial({ color: 0xffffff });
+            const blackMat = new THREE.MeshPhongMaterial({ color: 0x000000 });
+            const pinkMat = new THREE.MeshPhongMaterial({ color: 0xffaaaa });
             
             // Body
             const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 1.8), mat);
@@ -458,7 +461,53 @@
             head.position.set(0, 1.4, 0.7);
             group.add(head);
 
-            // Ears
+            // --- Face Features ---
+            // Muzzle (Pyszczek)
+            const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.3), whiteMat);
+            muzzle.position.set(0, 1.25, 1.2);
+            group.add(muzzle);
+
+            // Nose (Nosek)
+            const nose = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.1), pinkMat);
+            nose.position.set(0, 1.35, 1.35);
+            group.add(nose);
+
+            // Eyes
+            const eyeGeo = new THREE.BoxGeometry(0.2, 0.2, 0.1);
+            const eyeL = new THREE.Mesh(eyeGeo, whiteMat);
+            eyeL.position.set(0.25, 1.55, 1.15);
+            group.add(eyeL);
+            
+            const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.15, 0.05), blackMat);
+            pupil.position.set(0, 0, 0.06);
+            eyeL.add(pupil); // Pupil as child of eye
+
+            const eyeR = eyeL.clone();
+            eyeR.position.x = -0.25;
+            group.add(eyeR);
+
+            // --- Battle Paw (Melee) ---
+            const pawGroup = new THREE.Group();
+            const paw = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.6), mat);
+            pawGroup.add(paw);
+            // Claws
+            for(let i=-0.15; i<=0.15; i+=0.15) {
+                const claw = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.2), whiteMat);
+                claw.position.set(i, 0, 0.35);
+                paw.add(claw);
+            }
+            pawGroup.position.set(0.6, 0.8, 1.2);
+            pawGroup.scale.set(0,0,0); // Hidden by default
+            group.add(pawGroup);
+
+            // --- 3D Crosshair ---
+            const crosshairGeo = new THREE.RingGeometry(0.2, 0.3, 16);
+            const crosshairMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+            const crosshair = new THREE.Mesh(crosshairGeo, crosshairMat);
+            crosshair.position.set(0, 1.2, 10); // 10 units in front
+            group.add(crosshair);
+
+            // Existing features
             const earGeo = new THREE.ConeGeometry(0.2, 0.4, 3);
             const earL = new THREE.Mesh(earGeo, mat);
             earL.position.set(0.25, 2.0, 0.7);
@@ -467,7 +516,6 @@
             earR.position.x = -0.25;
             group.add(earR);
 
-            // Tail
             const tail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 1), mat);
             tail.position.set(0, 1.0, -1.2);
             tail.rotation.x = 0.5;
@@ -480,7 +528,9 @@
                 velocity: new THREE.Vector3(),
                 knockback: new THREE.Vector3(),
                 shake: 0,
-                box: new THREE.Box3()
+                box: new THREE.Box3(),
+                paw: pawGroup,
+                crosshair: crosshair
             };
             return group;
         }
@@ -591,6 +641,17 @@
             if (player.userData.currentWeapon === 'melee') {
                 playSound('melee');
                 spawnOnomatopoeia("SLASH!", player.position, 0xcccccc);
+                
+                // --- PAW ANIMATION ---
+                player.userData.paw.scale.set(1,1,1);
+                player.userData.paw.position.z = 1.5;
+                setTimeout(() => {
+                    if(player.userData.paw) {
+                        player.userData.paw.scale.set(0,0,0);
+                        player.userData.paw.position.z = 1.2;
+                    }
+                }, 200);
+
                 checkMeleeHit(player, weapon);
                 return;
             } else {
@@ -709,6 +770,9 @@
                     if (keys['KeyL']) shoot(p);
                     if (keys['KeyK']) p.userData.currentWeapon = p.userData.currentWeapon === 'primary' ? 'melee' : 'primary';
                 }
+
+                // Update Crosshair Visibility
+                p.userData.crosshair.visible = (p.userData.currentWeapon === 'primary');
 
                 // Apply Movement + Knockback
                 if (moveZ !== 0 || p.userData.knockback.length() > 0.01) {
