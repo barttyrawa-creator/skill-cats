@@ -297,8 +297,41 @@
         let capturePoint = { x: 0, z: 0, radius: 5, progress: 0, owner: null, mesh: null };
         let scores = { p1: 0, p2: 0 };
         let floatingTexts = [];
-        let textureCache = {}; // Cache for onomatopoeias to save performance
+        let textureCache = {};
         
+        // --- Real Audio System ---
+        const audioCache = {};
+        function playSound(name, volume = 0.4, loop = false) {
+            const paths = {
+                'SCOUT': 'sounds/shoot_scout.mp3',
+                'HEAVY': 'sounds/shoot_heavy.mp3',
+                'SNIPER': 'sounds/shoot_sniper.mp3',
+                'SOLDIER': 'sounds/shoot_soldier.mp3',
+                'melee': 'sounds/melee_slash.mp3',
+                'hit': 'sounds/hit_impact.mp3',
+                'death': 'sounds/death_meow.mp3',
+                'capture': 'sounds/capture_progress.mp3',
+                'win': 'sounds/win_music.mp3',
+                'ambient': 'sounds/ambient_garden.mp3'
+            };
+
+            const path = paths[name] || name;
+            if (!audioCache[path]) {
+                audioCache[path] = new Audio(path);
+            }
+
+            if (loop) {
+                audioCache[path].loop = true;
+                audioCache[path].volume = volume;
+                audioCache[path].play().catch(() => {});
+            } else {
+                // Clone for overlapping sounds (essential for rapid fire)
+                const sound = audioCache[path].cloneNode();
+                sound.volume = volume;
+                sound.play().catch(() => {});
+            }
+        }
+
         let lastTime = performance.now();
         let frameCount = 0;
         let fps = 0;
@@ -332,6 +365,7 @@
             document.getElementById('p2-hud').style.display = 'block';
             gameRunning = true;
             initGame();
+            playSound('ambient', 0.2, true); // Start background music
         };
 
         // --- Game Logic ---
@@ -343,29 +377,25 @@
             scene.background = new THREE.Color(config.sky);
             if (currentMap === 'ROOFTOPS') scene.fog = new THREE.FogExp2(config.sky, 0.02);
 
-            // OPTIMIZATION: Disable antialias for major FPS boost
+            // OPTIMIZATION: Shadows DISABLED for 60 FPS
             renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.BasicShadowMap; // Much faster than PCFSoft
             document.body.appendChild(renderer.domElement);
 
             // Lights
-            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambient);
-            const sun = new THREE.DirectionalLight(0xffffff, 1);
-            sun.position.set(20, 50, 10);
-            sun.castShadow = true;
-            sun.shadow.mapSize.width = 512; // Lower res for speed
-            sun.shadow.mapSize.height = 512;
+            const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+            sun.position.set(15, 30, 10);
             scene.add(sun);
 
-            // Environment - Use MeshLambert or MeshPhong for speed
+            // Environment
             const groundGeo = new THREE.PlaneGeometry(100, 100);
             const groundMat = new THREE.MeshPhongMaterial({ color: config.floor });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
+            ground.matrixAutoUpdate = false; // Static
+            ground.updateMatrix();
             scene.add(ground);
 
             // Build Map
@@ -373,19 +403,18 @@
             config.obstacles.forEach(obj => {
                 let geo;
                 if (obj.type === 'box') geo = new THREE.BoxGeometry(...obj.size);
-                else geo = new THREE.CylinderGeometry(obj.size[0], obj.size[1], obj.size[2], 12); // Less segments
-                
+                else geo = new THREE.CylinderGeometry(obj.size[0], obj.size[1], obj.size[2], 8); 
+
                 const mesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color: obj.color }));
                 mesh.position.set(...obj.pos);
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
+                mesh.matrixAutoUpdate = false; // Static
+                mesh.updateMatrix();
                 scene.add(mesh);
-                
+
                 mesh.geometry.computeBoundingBox();
                 const box = new THREE.Box3().setFromObject(mesh);
                 obstacles.push(box);
             });
-
             // Capture Point
             if (currentGameMode === 'CONTROL_POINT') {
                 const bowlGeo = new THREE.CylinderGeometry(capturePoint.radius, capturePoint.radius, 0.2, 16);
@@ -422,16 +451,14 @@
             // Body
             const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 1.8), mat);
             body.position.y = 0.8;
-            body.castShadow = true;
             group.add(body);
 
             // Head
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), mat);
             head.position.set(0, 1.4, 0.7);
-            head.castShadow = true;
             group.add(head);
 
-            // Ears - simpler geometry
+            // Ears
             const earGeo = new THREE.ConeGeometry(0.2, 0.4, 3);
             const earL = new THREE.Mesh(earGeo, mat);
             earL.position.set(0.25, 2.0, 0.7);
@@ -498,37 +525,47 @@
                 canvas.width = 256;
                 canvas.height = 128;
                 
-                ctx.font = 'bold 64px "Segoe UI"';
+                ctx.font = 'bold 72px "Impact", "Segoe UI"'; // Bigger, better font
                 ctx.fillStyle = '#' + new THREE.Color(color).getHexString();
                 ctx.strokeStyle = 'black';
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 6;
                 ctx.textAlign = 'center';
                 ctx.strokeText(text, 128, 80);
                 ctx.fillText(text, 128, 80);
 
                 texture = new THREE.CanvasTexture(canvas);
-                textureCache[key] = texture; // Cache it!
+                textureCache[key] = texture;
             }
 
             const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
             const sprite = new THREE.Sprite(mat);
-            sprite.position.copy(pos).add(new THREE.Vector3(0, 2, 0));
+            
+            // RANDOM OFFSET so they don't overlap
+            sprite.position.copy(pos).add(new THREE.Vector3(
+                (Math.random() - 0.5) * 1.5, 
+                2 + (Math.random() - 0.5) * 0.5, 
+                (Math.random() - 0.5) * 1.5
+            ));
             sprite.scale.set(3, 1.5, 1);
             
             scene.add(sprite);
-            floatingTexts.push({ sprite, life: 1.0 });
+            // DRIFT: Random direction for floating
+            floatingTexts.push({ 
+                sprite, 
+                life: 1.0, 
+                vel: new THREE.Vector3((Math.random()-0.5)*0.05, 0.04 + Math.random()*0.02, (Math.random()-0.5)*0.05) 
+            });
         }
 
         function updateOnomatopoeias() {
             for (let i = floatingTexts.length - 1; i >= 0; i--) {
                 const ft = floatingTexts[i];
-                ft.life -= 0.02;
-                ft.sprite.position.y += 0.03; // Float slower
+                ft.life -= 0.025;
+                ft.sprite.position.add(ft.vel); // Drift in random direction
                 ft.sprite.material.opacity = ft.life;
                 
                 if (ft.life <= 0) {
                     scene.remove(ft.sprite);
-                    // Don't dispose texture, it's in cache!
                     floatingTexts.splice(i, 1);
                 }
             }
@@ -537,6 +574,7 @@
         const p1BulletMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
         const p2BulletMat = new THREE.MeshBasicMaterial({ color: 0x4444ff });
         const projectileBox = new THREE.Box3(); 
+        let muzzleFlash; // Global light pool
 
         function shoot(player) {
             const stats = CLASSES[player.userData.class];
@@ -549,30 +587,37 @@
             // Screen shake for shooter
             player.userData.shake = weapon.damage * 0.05;
 
-            // Onomatopoeia based on weapon (Optimized)
-            let sound = "PEW!";
-            if (player.userData.class === 'SNIPER') sound = "BOOM!";
-            if (player.userData.class === 'HEAVY') sound = "RAT-TAT!";
-            if (player.userData.class === 'SOLDIER') sound = "KABLAM!";
-            if (player.userData.currentWeapon === 'melee') sound = "SLASH!";
-            spawnOnomatopoeia(sound, player.position, player === player1 ? 0xffaa00 : 0xcccccc);
-
+            // REAL SOUNDS
             if (player.userData.currentWeapon === 'melee') {
+                playSound('melee');
+                spawnOnomatopoeia("SLASH!", player.position, 0xcccccc);
                 checkMeleeHit(player, weapon);
                 return;
+            } else {
+                playSound(player.userData.class);
+                let soundName = "PEW!";
+                if (player.userData.class === 'SNIPER') soundName = "BOOM!";
+                if (player.userData.class === 'HEAVY') soundName = "RAT-TAT!";
+                if (player.userData.class === 'SOLDIER') soundName = "KABLAM!";
+                spawnOnomatopoeia(soundName, player.position, player === player1 ? 0xffaa00 : 0xcccccc);
             }
 
-            // Procedural Muzzle Flash (No Shadows for performance)
-            const flash = new THREE.PointLight(0xffcc00, 3, 4);
-            flash.position.copy(player.position).add(new THREE.Vector3(0, 1.2, 1).applyQuaternion(player.quaternion));
-            scene.add(flash);
-            setTimeout(() => scene.remove(flash), 50);
+            // Procedural Muzzle Flash (Reusable)
+            if (!muzzleFlash) {
+                muzzleFlash = new THREE.PointLight(0xffcc00, 3, 5);
+                scene.add(muzzleFlash);
+            }
+            muzzleFlash.position.copy(player.position).add(new THREE.Vector3(0, 1.2, 1).applyQuaternion(player.quaternion));
+            muzzleFlash.intensity = 3;
+            setTimeout(() => { if(muzzleFlash) muzzleFlash.intensity = 0; }, 50);
 
             for(let i=0; i < (weapon.count || 1); i++) {
                 const yarn = new THREE.Mesh(
-                    new THREE.SphereGeometry(weapon.size, 6, 6),
+                    new THREE.SphereGeometry(weapon.size, 5, 5), // Even lower segments
                     player === player1 ? p1BulletMat : p2BulletMat
                 );
+                yarn.castShadow = false; // Bullets don't need shadows!
+                yarn.receiveShadow = false;
                 yarn.position.copy(player.position).add(new THREE.Vector3(0, 1.2, 0.5).applyQuaternion(player.quaternion));
                 
                 const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(player.quaternion);
@@ -617,9 +662,11 @@
         function handleKill(attacker, victim) {
             const prefix = attacker === player1 ? 'p1' : 'p2';
             scores[prefix]++;
-            spawnOnomatopoeia("MEOW!", victim.position, 0xff0000); // Visual death sound
+            spawnOnomatopoeia("MEOW!", victim.position, 0xff0000); 
+            playSound('death');
             
             if (currentGameMode === 'DEATHMATCH' && scores[prefix] >= 10) {
+                playSound('win');
                 alert(`PLAYER ${prefix === 'p1' ? '1' : '2'} WINS!`);
                 location.reload();
             }
@@ -723,6 +770,7 @@
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
                 b.mesh.position.addScaledVector(b.dir, b.weapon.speed);
+                b.mesh.updateMatrixWorld();
 
                 let hitObstacle = false;
                 
@@ -736,15 +784,19 @@
                 }
 
                 const target = b.owner === player1 ? player2 : player1;
-                const dist = b.mesh.position.distanceTo(target.position.clone().add(new THREE.Vector3(0,1,0)));
+                // SQUARED distance is much faster than standard distance
+                const dx = b.mesh.position.x - target.position.x;
+                const dz = b.mesh.position.z - target.position.z;
+                const distSq = dx*dx + dz*dz;
                 
-                if (dist < 1.6 || hitObstacle) {
-                    if (dist < 1.6) {
+                if (distSq < 2.5 || hitObstacle) { // 1.6^2 is approx 2.56
+                    if (distSq < 2.5) {
                         target.userData.hp -= b.weapon.damage;
                         const kbDir = b.dir.clone().multiplyScalar(b.weapon.damage * 0.015);
                         target.userData.knockback.add(kbDir);
                         target.userData.shake = b.weapon.damage * 0.1;
 
+                        playSound('hit', 0.3); // Sound on hit
                         spawnHitEffect(target.position);
                         if (target.userData.hp <= 0) handleKill(b.owner, target);
                         updateHUD(target);
