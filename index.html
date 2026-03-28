@@ -3,117 +3,208 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cat Fortress 2 - Split Screen</title>
+    <title>Cat Fortress 2 - Fix Update</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #222; }
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a1a; }
         canvas { display: block; }
+        
         #ui {
             position: absolute;
             top: 10px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 20px;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
             pointer-events: none;
             color: white;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             z-index: 10;
         }
+
+        #game-info {
+            background: rgba(0,0,0,0.7);
+            padding: 5px 20px;
+            border-radius: 20px;
+            border: 2px solid #ffcc00;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
         .hud {
             position: absolute;
             bottom: 20px;
-            background: rgba(0,0,0,0.6);
-            padding: 10px 20px;
-            border-radius: 10px;
-            color: white;
-            font-weight: bold;
-            border: 2px solid #555;
-            min-width: 150px;
-        }
-        #p1-hud { left: 20px; border-color: #ff4444; }
-        #p2-hud { right: 20px; border-color: #4444ff; }
-        #capture-status {
             background: rgba(0,0,0,0.8);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 1.2em;
-        }
-        .controls-hint {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.95);
-            color: white;
-            padding: 20px 40px;
+            padding: 15px;
             border-radius: 15px;
-            text-align: center;
-            z-index: 20;
-            max-width: 800px;
-            border: 2px solid #555;
+            color: white;
+            border: 3px solid #555;
+            min-width: 200px;
+            transition: all 0.3s;
         }
-        .split-line {
-            position: absolute;
-            left: 50%;
-            top: 0;
-            width: 4px;
-            height: 100%;
+        #p1-hud { left: 20px; border-color: #ff4444; box-shadow: 0 0 15px rgba(255,68,68,0.4); }
+        #p2-hud { right: 20px; border-color: #4444ff; box-shadow: 0 0 15px rgba(68,68,255,0.4); }
+
+        .hp-bar-container {
+            width: 100%;
+            height: 20px;
             background: #333;
-            transform: translateX(-50%);
-            z-index: 5;
+            border-radius: 10px;
+            margin-top: 10px;
+            overflow: hidden;
+            border: 1px solid #000;
         }
-        .class-select {
+        .hp-bar {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #ff4444, #ff8888);
+            transition: width 0.3s ease-out;
+        }
+
+        .weapon-info {
+            font-size: 0.9em;
+            color: #ccc;
+            margin-top: 5px;
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, #2c3e50 0%, #000000 100%);
+            color: white;
             display: flex;
-            gap: 10px;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
+            z-index: 100;
+            text-align: center;
+        }
+
+        .menu-panel {
+            background: rgba(255,255,255,0.05);
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            max-width: 900px;
+        }
+
+        .selection-group {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
             margin-top: 10px;
         }
-        .class-btn {
-            padding: 8px 12px;
+
+        .btn {
+            padding: 10px;
             cursor: pointer;
             background: #444;
             color: white;
             border: 2px solid transparent;
-            border-radius: 5px;
-            font-size: 0.9em;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.2s;
         }
-        .class-btn:hover { background: #555; }
-        .class-btn.selected { border-color: #4CAF50; background: #2e7d32; }
+        .btn:hover { background: #555; transform: translateY(-2px); }
+        .btn.selected { border-color: #ffcc00; background: #5d4e00; }
+
+        .start-btn {
+            margin-top: 30px;
+            padding: 20px 60px;
+            font-size: 1.5em;
+            background: #e67e22;
+            border: none;
+            border-radius: 50px;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(230,126,34,0.4);
+        }
+        .start-btn:hover { background: #d35400; transform: scale(1.05); }
+
+        .split-line {
+            position: absolute;
+            left: 50%; top: 0; width: 6px; height: 100%;
+            background: #111;
+            z-index: 5;
+            box-shadow: 0 0 10px rgba(0,0,0,1);
+        }
+
+        h1 { font-size: 4em; margin-bottom: 10px; color: #ffcc00; text-shadow: 4px 4px 0px #d35400; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <div id="capture-status">Capture Point: Neutral</div>
+        <div id="game-info">Objective: Capture the Milk Bowl!</div>
     </div>
 
-    <div id="p1-hud" class="hud">P1: <span id="p1-class-name">...</span><br>HP: <span id="p1-hp">100</span></div>
-    <div id="p2-hud" class="hud">P2: <span id="p2-class-name">...</span><br>HP: <span id="p2-hp">100</span></div>
+    <div id="p1-hud" class="hud" style="display:none">
+        <div style="font-size:1.4em">Player 1: <span id="p1-class-name">...</span></div>
+        <div class="hp-bar-container"><div id="p1-hp-bar" class="hp-bar"></div></div>
+        <div class="weapon-info">Weapon: <span id="p1-weapon">Primary</span></div>
+        <div style="font-size:0.8em; margin-top:5px; color:#aaa">Score: <span id="p1-score">0</span></div>
+    </div>
 
-    <div id="start-screen" class="controls-hint">
-        <h1>CAT FORTRESS 2</h1>
-        <div style="display:flex; gap:40px; justify-content:center; text-align: left;">
-            <div style="border-right: 1px solid #444; padding-right: 40px;">
-                <h3 style="color:#ff4444">Player 1 (Ginger)</h3>
-                Controls: <b>WASD + F</b>
-                <div class="class-select" id="p1-classes">
-                    <button class="class-btn selected" onclick="selectClass(1, 'SCOUT')">SCOUT</button>
-                    <button class="class-btn" onclick="selectClass(1, 'HEAVY')">HEAVY</button>
-                    <button class="class-btn" onclick="selectClass(1, 'SNIPER')">SNIPER</button>
-                    <button class="class-btn" onclick="selectClass(1, 'SOLDIER')">SOLDIER</button>
+    <div id="p2-hud" class="hud" style="display:none">
+        <div style="font-size:1.4em">Player 2: <span id="p2-class-name">...</span></div>
+        <div class="hp-bar-container"><div id="p2-hp-bar" class="hp-bar"></div></div>
+        <div class="weapon-info">Weapon: <span id="p2-weapon">Primary</span></div>
+        <div style="font-size:0.8em; margin-top:5px; color:#aaa">Score: <span id="p2-score">0</span></div>
+    </div>
+
+    <div id="start-screen">
+        <div class="menu-panel">
+            <h1>CAT FORTRESS 2</h1>
+            
+            <div class="selection-group">
+                <h3>Select Map</h3>
+                <div class="btn-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <button class="btn selected" onclick="setMap('GARDEN', this)">GARDEN (Classic)</button>
+                    <button class="btn" onclick="setMap('KITCHEN', this)">KITCHEN (High Walls)</button>
+                    <button class="btn" onclick="setMap('ROOFTOPS', this)">ROOFTOPS (Danger!)</button>
                 </div>
             </div>
-            <div>
-                <h3 style="color:#4444ff">Player 2 (Tabby)</h3>
-                Controls: <b>ARROWS + L</b>
-                <div class="class-select" id="p2-classes">
-                    <button class="class-btn" onclick="selectClass(2, 'SCOUT')">SCOUT</button>
-                    <button class="class-btn selected" onclick="selectClass(2, 'HEAVY')">HEAVY</button>
-                    <button class="class-btn" onclick="selectClass(2, 'SNIPER')">SNIPER</button>
-                    <button class="class-btn" onclick="selectClass(2, 'SOLDIER')">SOLDIER</button>
+
+            <div class="selection-group">
+                <h3>Select Game Mode</h3>
+                <div class="btn-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <button class="btn selected" onclick="setMode('CONTROL_POINT', this)">CONTROL POINT</button>
+                    <button class="btn" onclick="setMode('DEATHMATCH', this)">DEATHMATCH</button>
                 </div>
             </div>
+
+            <div style="display:flex; gap:30px; justify-content:center;">
+                <div class="selection-group" style="flex:1">
+                    <h3 style="color:#ff4444">P1 Class (WASD+F/G)</h3>
+                    <div class="btn-grid" id="p1-classes">
+                        <button class="btn selected" onclick="selectClass(1, 'SCOUT')">SCOUT</button>
+                        <button class="btn" onclick="selectClass(1, 'HEAVY')">HEAVY</button>
+                        <button class="btn" onclick="selectClass(1, 'SNIPER')">SNIPER</button>
+                        <button class="btn" onclick="selectClass(1, 'SOLDIER')">SOLDIER</button>
+                    </div>
+                </div>
+                <div class="selection-group" style="flex:1">
+                    <h3 style="color:#4444ff">P2 Class (Arrows+L/K)</h3>
+                    <div class="btn-grid" id="p2-classes">
+                        <button class="btn" onclick="selectClass(2, 'SCOUT')">SCOUT</button>
+                        <button class="btn selected" onclick="selectClass(2, 'HEAVY')">HEAVY</button>
+                        <button class="btn" onclick="selectClass(2, 'SNIPER')">SNIPER</button>
+                        <button class="btn" onclick="selectClass(2, 'SOLDIER')">SOLDIER</button>
+                    </div>
+                </div>
+            </div>
+
+            <button class="start-btn" onclick="startGame()">START MEOW!</button>
         </div>
-        <button onclick="startGame()" style="margin-top:30px; padding:15px 40px; cursor:pointer; font-size:1.3em; background:#4CAF50; color:white; border:none; border-radius:10px; font-weight:bold;">START MEOW!</button>
     </div>
 
     <div class="split-line"></div>
@@ -121,8 +212,7 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
             }
         }
     </script>
@@ -130,124 +220,186 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- Game Config ---
-        const P1_COLOR = 0xffa500; // Ginger
-        const P2_COLOR = 0x888888; // Tabby
+        // --- Configuration ---
+        const P1_COLOR = 0xff6600; 
+        const P2_COLOR = 0x555555;
 
         const CLASSES = {
-            SCOUT:   { hp: 80,  speed: 0.4,  reload: 200, damage: 10, bulletSize: 0.15, bulletSpeed: 1.0 },
-            HEAVY:   { hp: 250, speed: 0.15, reload: 600, damage: 25, bulletSize: 0.45, bulletSpeed: 0.6 },
-            SNIPER:  { hp: 100, speed: 0.25, reload: 1500, damage: 70, bulletSize: 0.1, bulletSpeed: 2.0 },
-            SOLDIER: { hp: 150, speed: 0.25, reload: 400, damage: 15, bulletSize: 0.25, bulletSpeed: 0.8 }
+            SCOUT: { 
+                hp: 100, speed: 0.45, 
+                primary: { name: 'Milk Spray', damage: 12, reload: 250, range: 20, size: 0.15, speed: 1.2, count: 3 },
+                melee: { name: 'Claws', damage: 35, reload: 400, range: 3 }
+            },
+            HEAVY: { 
+                hp: 300, speed: 0.18, 
+                primary: { name: 'Yarn Gatling', damage: 8, reload: 80, range: 40, size: 0.3, speed: 0.9, count: 1 },
+                melee: { name: 'Big Paws', damage: 50, reload: 600, range: 3.5 }
+            },
+            SNIPER: { 
+                hp: 125, speed: 0.28, 
+                primary: { name: 'Precision Yarn', damage: 85, reload: 1800, range: 100, size: 0.1, speed: 3.0, count: 1 },
+                melee: { name: 'Fish Bone', damage: 25, reload: 300, range: 3 }
+            },
+            SOLDIER: { 
+                hp: 200, speed: 0.25, 
+                primary: { name: 'Yarn Launcher', damage: 45, reload: 800, range: 50, size: 0.6, speed: 0.7, count: 1, splash: 5 },
+                melee: { name: 'Scratch', damage: 40, reload: 500, range: 3 }
+            }
         };
 
-        let p1Class = 'SCOUT';
-        let p2Class = 'HEAVY';
+        const MAP_CONFIGS = {
+            GARDEN: {
+                floor: 0x556b2f,
+                sky: 0x87ceeb,
+                obstacles: [
+                    { type: 'box', pos: [10, 1, 10], size: [3, 2, 3], color: 0x228b22 },
+                    { type: 'box', pos: [-10, 1, -10], size: [3, 2, 3], color: 0x228b22 },
+                    { type: 'box', pos: [15, 1, -5], size: [2, 2, 2], color: 0x8b4513 },
+                    { type: 'box', pos: [-15, 1, 5], size: [2, 2, 2], color: 0x8b4513 },
+                    { type: 'cylinder', pos: [0, 1.5, 15], size: [1, 1, 3], color: 0x8b4513 },
+                    { type: 'cylinder', pos: [0, 1.5, -15], size: [1, 1, 3], color: 0x8b4513 }
+                ]
+            },
+            KITCHEN: {
+                floor: 0xcccccc,
+                sky: 0x444444,
+                obstacles: [
+                    { type: 'box', pos: [0, 4, 15], size: [30, 8, 2], color: 0x888888 }, // Counter
+                    { type: 'box', pos: [0, 4, -15], size: [30, 8, 2], color: 0x888888 },
+                    { type: 'box', pos: [10, 1.5, 0], size: [4, 3, 4], color: 0xffffff }, // Fridge
+                    { type: 'box', pos: [-10, 1, 0], size: [5, 2, 8], color: 0x5d4037 }  // Table
+                ]
+            },
+            ROOFTOPS: {
+                floor: 0x333333,
+                sky: 0x000011,
+                obstacles: [
+                    { type: 'box', pos: [0, 10, 0], size: [10, 20, 10], color: 0x222222 },
+                    { type: 'box', pos: [20, 2, 20], size: [10, 4, 10], color: 0x444444 },
+                    { type: 'box', pos: [-20, 2, -20], size: [10, 4, 10], color: 0x444444 },
+                    { type: 'box', pos: [20, 2, -20], size: [10, 4, 10], color: 0x444444 },
+                    { type: 'box', pos: [-20, 2, 20], size: [10, 4, 10], color: 0x444444 }
+                ]
+            }
+        };
 
+        // --- State Variables ---
         let scene, renderer;
         let player1, player2;
         let p1Cam, p2Cam;
-        let bullets = [];
-        let capturePoint = { x: 0, z: 0, radius: 4, progress: 0, owner: null };
+        let currentMap = 'GARDEN';
+        let currentGameMode = 'CONTROL_POINT';
+        let p1Class = 'SCOUT', p2Class = 'HEAVY';
         let gameRunning = false;
-
-        const p1BulletMat = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-        const p2BulletMat = new THREE.MeshPhongMaterial({ color: 0x0000ff });
-
+        let bullets = [];
+        let obstacles = [];
+        let capturePoint = { x: 0, z: 0, radius: 5, progress: 0, owner: null, mesh: null };
+        let scores = { p1: 0, p2: 0 };
+        
         const keys = {};
         window.onkeydown = (e) => keys[e.code] = true;
         window.onkeyup = (e) => keys[e.code] = false;
 
-        window.selectClass = (player, className) => {
-            if (player === 1) {
-                p1Class = className;
-                updateButtons('p1-classes', className);
-            } else {
-                p2Class = className;
-                updateButtons('p2-classes', className);
-            }
+        // --- Menu Functions ---
+        window.setMap = (m, btn) => {
+            currentMap = m;
+            document.querySelectorAll('.btn-grid')[0].querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
         };
-
-        function updateButtons(containerId, selectedName) {
-            const container = document.getElementById(containerId);
-            const btns = container.getElementsByClassName('class-btn');
-            for (let btn of btns) {
-                btn.classList.toggle('selected', btn.innerText === selectedName);
-            }
-        }
+        window.setMode = (m, btn) => {
+            currentGameMode = m;
+            document.querySelectorAll('.btn-grid')[1].querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        };
+        window.selectClass = (p, c) => {
+            if (p === 1) p1Class = c; else p2Class = c;
+            const idx = p === 1 ? 2 : 3;
+            document.querySelectorAll('.btn-grid')[idx].querySelectorAll('.btn').forEach(b => {
+                b.classList.toggle('selected', b.innerText === c);
+            });
+        };
 
         window.startGame = () => {
             document.getElementById('start-screen').style.display = 'none';
-            applyClass(player1, p1Class);
-            applyClass(player2, p2Class);
+            document.getElementById('p1-hud').style.display = 'block';
+            document.getElementById('p2-hud').style.display = 'block';
             gameRunning = true;
+            initGame();
         };
 
-        function applyClass(player, className) {
-            const stats = CLASSES[className];
-            player.userData.class = className;
-            player.userData.hp = stats.hp;
-            player.userData.maxHp = stats.hp;
-            
-            const hudPrefix = player === player1 ? 'p1' : 'p2';
-            document.getElementById(`${hudPrefix}-class-name`).innerText = className;
-            document.getElementById(`${hudPrefix}-hp`).innerText = stats.hp;
-        }
+        // --- Game Logic ---
+        function initGame() {
+            if (renderer) return; // Prevent multiple initializations
 
-        function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87ceeb);
+            const config = MAP_CONFIGS[currentMap];
+            scene.background = new THREE.Color(config.sky);
+            if (currentMap === 'ROOFTOPS') scene.fog = new THREE.FogExp2(config.sky, 0.02);
 
-            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.BasicShadowMap; // Faster shadows
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             document.body.appendChild(renderer.domElement);
 
             // Lights
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-            scene.add(ambientLight);
-            
-            const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-            sun.position.set(10, 20, 10);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambient);
+            const sun = new THREE.DirectionalLight(0xffffff, 1);
+            sun.position.set(20, 50, 10);
             sun.castShadow = true;
-            sun.shadow.mapSize.width = 512; // Lower res for speed
-            sun.shadow.mapSize.height = 512;
+            sun.shadow.mapSize.width = 1024;
+            sun.shadow.mapSize.height = 1024;
             scene.add(sun);
 
-            // Ground
+            // Environment
             const groundGeo = new THREE.PlaneGeometry(100, 100);
-            const groundMat = new THREE.MeshLambertMaterial({ color: 0x556b2f }); // Faster material
+            const groundMat = new THREE.MeshStandardMaterial({ color: config.floor, roughness: 0.8 });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
             ground.receiveShadow = true;
             scene.add(ground);
 
-            // Simple Obstacles
-            const boxGeo = new THREE.BoxGeometry(2, 2, 2);
-            const boxMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
-            for(let i=0; i<12; i++) {
-                const box = new THREE.Mesh(boxGeo, boxMat);
-                box.position.set(Math.random()*40-20, 1, Math.random()*40-20);
-                box.castShadow = true;
-                box.receiveShadow = true;
-                scene.add(box);
+            // Build Map
+            obstacles = [];
+            config.obstacles.forEach(obj => {
+                let geo;
+                if (obj.type === 'box') geo = new THREE.BoxGeometry(...obj.size);
+                else geo = new THREE.CylinderGeometry(obj.size[0], obj.size[1], obj.size[2], 16);
+                
+                const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: obj.color }));
+                mesh.position.set(...obj.pos);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                
+                // Add bounding box for collisions
+                mesh.geometry.computeBoundingBox();
+                const box = new THREE.Box3().setFromObject(mesh);
+                obstacles.push(box);
+            });
+
+            // Capture Point
+            if (currentGameMode === 'CONTROL_POINT') {
+                const bowlGeo = new THREE.CylinderGeometry(capturePoint.radius, capturePoint.radius, 0.2, 32);
+                const bowlMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, emissive: 0x333333 });
+                capturePoint.mesh = new THREE.Mesh(bowlGeo, bowlMat);
+                capturePoint.mesh.position.y = 0.1;
+                scene.add(capturePoint.mesh);
+                document.getElementById('game-info').innerText = "Objective: Capture the Milk Bowl!";
+            } else {
+                document.getElementById('game-info').innerText = "Objective: Deathmatch - Get 10 Kills!";
             }
 
-            // Capture Point (The Milk Bowl)
-            const bowlGeo = new THREE.CylinderGeometry(capturePoint.radius, capturePoint.radius, 0.2, 32);
-            const bowlMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
-            const bowl = new THREE.Mesh(bowlGeo, bowlMat);
-            bowl.position.y = 0.05;
-            scene.add(bowl);
-
             // Players
-            player1 = createCat(P1_COLOR, new THREE.Vector3(-10, 0, 0));
-            player2 = createCat(P2_COLOR, new THREE.Vector3(10, 0, 0));
+            player1 = createCat(P1_COLOR, new THREE.Vector3(-15, 0, 0));
+            player2 = createCat(P2_COLOR, new THREE.Vector3(15, 0, 0));
             player2.rotation.y = Math.PI;
-
             scene.add(player1);
             scene.add(player2);
+
+            applyClass(player1, p1Class);
+            applyClass(player2, p2Class);
 
             // Cameras
             p1Cam = new THREE.PerspectiveCamera(75, (window.innerWidth/2) / window.innerHeight, 0.1, 1000);
@@ -259,176 +411,276 @@
 
         function createCat(color, pos) {
             const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: color });
             
             // Body
-            const body = new THREE.Mesh(
-                new THREE.BoxGeometry(1, 1, 1.5),
-                new THREE.MeshPhongMaterial({ color: color })
-            );
-            body.position.y = 0.6;
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 1.8), mat);
+            body.position.y = 0.8;
             body.castShadow = true;
             group.add(body);
 
             // Head
-            const head = new THREE.Mesh(
-                new THREE.BoxGeometry(0.8, 0.8, 0.8),
-                new THREE.MeshPhongMaterial({ color: color })
-            );
-            head.position.set(0, 1.2, 0.6);
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), mat);
+            head.position.set(0, 1.4, 0.7);
             head.castShadow = true;
             group.add(head);
 
             // Ears
-            const earGeo = new THREE.ConeGeometry(0.2, 0.3, 3);
-            const earL = new THREE.Mesh(earGeo, new THREE.MeshPhongMaterial({ color: color }));
-            earL.position.set(0.2, 1.7, 0.6);
+            const earGeo = new THREE.ConeGeometry(0.2, 0.4, 4);
+            const earL = new THREE.Mesh(earGeo, mat);
+            earL.position.set(0.25, 2.0, 0.7);
             group.add(earL);
             const earR = earL.clone();
-            earR.position.x = -0.2;
+            earR.position.x = -0.25;
             group.add(earR);
+
+            // Tail
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 1), mat);
+            tail.position.set(0, 1.0, -1.2);
+            tail.rotation.x = 0.5;
+            group.add(tail);
 
             group.position.copy(pos);
             group.userData = { 
-                hp: 100, 
-                lastShot: 0, 
-                team: color === P1_COLOR ? 'Ginger' : 'Tabby' 
+                hp: 100, maxHp: 100, lastShot: 0, 
+                currentWeapon: 'primary',
+                velocity: new THREE.Vector3(),
+                box: new THREE.Box3()
             };
             return group;
         }
 
+        function applyClass(player, className) {
+            const stats = CLASSES[className];
+            player.userData.class = className;
+            player.userData.hp = stats.hp;
+            player.userData.maxHp = stats.hp;
+            
+            const prefix = player === player1 ? 'p1' : 'p2';
+            document.getElementById(`${prefix}-class-name`).innerText = className;
+            updateHUD(player);
+        }
+
+        function updateHUD(player) {
+            const prefix = player === player1 ? 'p1' : 'p2';
+            const percent = (player.userData.hp / player.userData.maxHp) * 100;
+            document.getElementById(`${prefix}-hp-bar`).style.width = `${Math.max(0, percent)}%`;
+            
+            const stats = CLASSES[player.userData.class];
+            const weapon = stats[player.userData.currentWeapon];
+            document.getElementById(`${prefix}-weapon`).innerText = weapon.name;
+            document.getElementById(`${prefix}-score`).innerText = scores[prefix];
+        }
+
         function shoot(player) {
             const stats = CLASSES[player.userData.class];
+            const weapon = stats[player.userData.currentWeapon];
             const now = Date.now();
-            if (now - player.userData.lastShot < stats.reload) return;
+            
+            if (now - player.userData.lastShot < weapon.reload) return;
             player.userData.lastShot = now;
 
-            const yarn = new THREE.Mesh(
-                new THREE.SphereGeometry(stats.bulletSize, 8, 8),
-                player === player1 ? p1BulletMat : p2BulletMat
-            );
-            yarn.position.copy(player.position);
-            yarn.position.y = 1;
-            
-            const direction = new THREE.Vector3(0, 0, 1);
-            direction.applyQuaternion(player.quaternion);
-            
-            bullets.push({
-                mesh: yarn,
-                dir: direction,
-                owner: player,
-                damage: stats.damage,
-                speed: stats.bulletSpeed
-            });
-            scene.add(yarn);
-        }
+            if (player.userData.currentWeapon === 'melee') {
+                checkMeleeHit(player, weapon);
+                return;
+            }
 
-        function updatePlayers() {
-            if (!gameRunning) return;
-
-            const p1Stats = CLASSES[p1Class];
-            const p2Stats = CLASSES[p2Class];
-
-            // P1 Controls
-            if (keys['KeyW']) player1.translateZ(p1Stats.speed);
-            if (keys['KeyS']) player1.translateZ(-p1Stats.speed);
-            if (keys['KeyA']) player1.rotation.y += 0.07;
-            if (keys['KeyD']) player1.rotation.y -= 0.07;
-            if (keys['KeyF']) shoot(player1);
-
-            // P2 Controls
-            if (keys['ArrowUp']) player2.translateZ(p2Stats.speed);
-            if (keys['ArrowDown']) player2.translateZ(-p2Stats.speed);
-            if (keys['ArrowLeft']) player2.rotation.y += 0.07;
-            if (keys['ArrowRight']) player2.rotation.y -= 0.07;
-            if (keys['KeyL']) shoot(player2);
-
-            // Keep in bounds
-            [player1, player2].forEach(p => {
-                p.position.x = Math.max(-45, Math.min(45, p.position.x));
-                p.position.z = Math.max(-45, Math.min(45, p.position.z));
-            });
-
-            // Camera follow
-            updateCamera(p1Cam, player1);
-            updateCamera(p2Cam, player2);
-        }
-
-        function updateCamera(cam, player) {
-            const offset = new THREE.Vector3(0, 3, -6);
-            offset.applyQuaternion(player.quaternion);
-            cam.position.copy(player.position).add(offset);
-            cam.lookAt(player.position.x, player.position.y + 1, player.position.z);
-        }
-
-        function updateBullets() {
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i];
-                b.mesh.position.addScaledVector(b.dir, b.speed);
-
-                // Collision with other player
-                const target = b.owner === player1 ? player2 : player1;
-                const dist = b.mesh.position.distanceTo(target.position);
+            for(let i=0; i < (weapon.count || 1); i++) {
+                const yarn = new THREE.Mesh(
+                    new THREE.SphereGeometry(weapon.size, 8, 8),
+                    new THREE.MeshStandardMaterial({ 
+                        color: player === player1 ? 0xff4444 : 0x4444ff, 
+                        emissive: player === player1 ? 0x220000 : 0x000022 
+                    })
+                );
+                yarn.position.copy(player.position).add(new THREE.Vector3(0, 1.2, 0.5).applyQuaternion(player.quaternion));
                 
-                if (dist < 1.5) {
-                    target.userData.hp -= b.damage;
-                    const hudPrefix = target === player1 ? 'p1' : 'p2';
-                    document.getElementById(`${hudPrefix}-hp`).innerText = Math.max(0, target.userData.hp);
-                    
-                    if (target.userData.hp <= 0) respawn(target);
-                    removeBullet(i);
-                    continue;
+                const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(player.quaternion);
+                if (weapon.count > 1) {
+                    dir.x += (Math.random() - 0.5) * 0.2;
+                    dir.y += (Math.random() - 0.5) * 0.2;
                 }
 
-                // Range limit
-                if (b.mesh.position.length() > 100) {
-                    removeBullet(i);
-                }
+                bullets.push({
+                    mesh: yarn,
+                    dir: dir,
+                    owner: player,
+                    weapon: weapon,
+                    birth: now
+                });
+                scene.add(yarn);
             }
         }
 
-        function removeBullet(index) {
-            scene.remove(bullets[index].mesh);
-            bullets.splice(index, 1);
+        function checkMeleeHit(player, weapon) {
+            const target = player === player1 ? player2 : player1;
+            const dist = player.position.distanceTo(target.position);
+            if (dist < weapon.range) {
+                target.userData.hp -= weapon.damage;
+                spawnHitEffect(target.position);
+                if (target.userData.hp <= 0) handleKill(player, target);
+                updateHUD(target);
+            }
+        }
+
+        function spawnHitEffect(pos) {
+            const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            for(let i=0; i<5; i++) {
+                const p = new THREE.Mesh(geo, mat);
+                p.position.copy(pos).add(new THREE.Vector3(Math.random()-0.5, 1, Math.random()-0.5));
+                scene.add(p);
+                setTimeout(() => scene.remove(p), 200);
+            }
+        }
+
+        function handleKill(attacker, victim) {
+            const prefix = attacker === player1 ? 'p1' : 'p2';
+            scores[prefix]++;
+            if (currentGameMode === 'DEATHMATCH' && scores[prefix] >= 10) {
+                alert(`PLAYER ${prefix === 'p1' ? '1' : '2'} WINS!`);
+                location.reload();
+            }
+            respawn(victim);
         }
 
         function respawn(player) {
             const stats = CLASSES[player.userData.class];
             player.userData.hp = stats.hp;
-            player.position.set(player === player1 ? -20 : 20, 0, Math.random()*10-5);
-            
-            const hudPrefix = player === player1 ? 'p1' : 'p2';
-            document.getElementById(`${hudPrefix}-hp`).innerText = stats.hp;
+            const spawnX = player === player1 ? -20 : 20;
+            player.position.set(spawnX, 0, (Math.random()-0.5)*20);
+            updateHUD(player);
+        }
+
+        function updatePlayers() {
+            if (!gameRunning) return;
+
+            [player1, player2].forEach(p => {
+                const prefix = p === player1 ? 'p1' : 'p2';
+                const stats = CLASSES[p.userData.class];
+                const moveSpeed = stats.speed;
+                
+                let moveZ = 0;
+                
+                if (p === player1) {
+                    if (keys['KeyW']) moveZ += moveSpeed;
+                    if (keys['KeyS']) moveZ -= moveSpeed;
+                    if (keys['KeyA']) p.rotation.y += 0.06;
+                    if (keys['KeyD']) p.rotation.y -= 0.06;
+                    if (keys['KeyF']) shoot(p);
+                    if (keys['KeyG']) p.userData.currentWeapon = p.userData.currentWeapon === 'primary' ? 'melee' : 'primary';
+                } else {
+                    if (keys['ArrowUp']) moveZ += moveSpeed;
+                    if (keys['ArrowDown']) moveZ -= moveSpeed;
+                    if (keys['ArrowLeft']) p.rotation.y += 0.06;
+                    if (keys['ArrowRight']) p.rotation.y -= 0.06;
+                    if (keys['KeyL']) shoot(p);
+                    if (keys['KeyK']) p.userData.currentWeapon = p.userData.currentWeapon === 'primary' ? 'melee' : 'primary';
+                }
+
+                if (moveZ !== 0) {
+                    const oldPos = p.position.clone();
+                    p.translateZ(moveZ);
+                    
+                    p.userData.box.setFromObject(p);
+                    let collided = false;
+                    for(let box of obstacles) {
+                        if (p.userData.box.intersectsBox(box)) {
+                            collided = true;
+                            break;
+                        }
+                    }
+                    if (collided) p.position.copy(oldPos);
+
+                    p.children[0].position.y = 1.4 + Math.sin(Date.now() * 0.01) * 0.05;
+                }
+
+                if (currentMap === 'ROOFTOPS' && p.position.y < -5) respawn(p);
+                
+                updateHUD(p);
+            });
+
+            updateCamera(p1Cam, player1);
+            updateCamera(p2Cam, player2);
+        }
+
+        function updateCamera(cam, player) {
+            const offset = new THREE.Vector3(0, 4, -8);
+            offset.applyQuaternion(player.quaternion);
+            cam.position.lerp(player.position.clone().add(offset), 0.1);
+            cam.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
+        }
+
+        function updateBullets() {
+            const now = Date.now();
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.mesh.position.addScaledVector(b.dir, b.weapon.speed);
+
+                let hitObstacle = false;
+                const bulletBox = new THREE.Box3().setFromObject(b.mesh);
+                for(let box of obstacles) {
+                    if (bulletBox.intersectsBox(box)) {
+                        hitObstacle = true;
+                        break;
+                    }
+                }
+
+                const target = b.owner === player1 ? player2 : player1;
+                const dist = b.mesh.position.distanceTo(target.position.clone().add(new THREE.Vector3(0,1,0)));
+                
+                if (dist < 1.5 || hitObstacle) {
+                    if (dist < 1.5) {
+                        target.userData.hp -= b.weapon.damage;
+                        spawnHitEffect(target.position);
+                        if (target.userData.hp <= 0) handleKill(b.owner, target);
+                        updateHUD(target);
+                    }
+                    removeBullet(i);
+                    continue;
+                }
+
+                if (now - b.birth > 3000) removeBullet(i);
+            }
+        }
+
+        function removeBullet(idx) {
+            scene.remove(bullets[idx].mesh);
+            bullets.splice(idx, 1);
         }
 
         function updateCapture() {
-            let p1In = player1.position.distanceTo(new THREE.Vector3(0,0,0)) < capturePoint.radius;
-            let p2In = player2.position.distanceTo(new THREE.Vector3(0,0,0)) < capturePoint.radius;
+            if (currentGameMode !== 'CONTROL_POINT') return;
 
-            const statusEl = document.getElementById('capture-status');
+            const p1In = player1.position.distanceTo(new THREE.Vector3(0,0,0)) < capturePoint.radius;
+            const p2In = player2.position.distanceTo(new THREE.Vector3(0,0,0)) < capturePoint.radius;
+            const statusEl = document.getElementById('game-info');
 
             if (p1In && !p2In) {
-                capturePoint.progress += 0.01;
+                capturePoint.progress = Math.min(1, capturePoint.progress + 0.005);
                 if (capturePoint.progress >= 1) {
                     capturePoint.owner = 'Ginger';
-                    statusEl.style.color = '#ffaa00';
-                    statusEl.innerText = "Captured by GINGER!";
+                    capturePoint.mesh.material.emissive.setHex(0xff4444);
                 }
             } else if (p2In && !p1In) {
-                capturePoint.progress -= 0.01;
+                capturePoint.progress = Math.max(-1, capturePoint.progress - 0.005);
                 if (capturePoint.progress <= -1) {
                     capturePoint.owner = 'Tabby';
-                    statusEl.style.color = '#aaaaaa';
-                    statusEl.innerText = "Captured by TABBY!";
+                    capturePoint.mesh.material.emissive.setHex(0x4444ff);
                 }
             }
-            
-            if (capturePoint.owner === null) {
-                const percent = Math.abs(Math.round(capturePoint.progress * 100));
-                statusEl.innerText = `Capture Point: ${percent}% ${capturePoint.progress > 0 ? 'Ginger' : 'Tabby'}`;
+
+            if (capturePoint.owner) {
+                statusEl.innerText = `Point Captured by ${capturePoint.owner === 'Ginger' ? 'P1' : 'P2'}!`;
+                statusEl.style.color = capturePoint.owner === 'Ginger' ? '#ff4444' : '#4444ff';
+            } else {
+                const p = Math.abs(Math.round(capturePoint.progress * 100));
+                statusEl.innerText = `Capture Progress: ${p}% (${capturePoint.progress > 0 ? 'P1' : 'P2'})`;
             }
         }
 
         function onWindowResize() {
+            if (!p1Cam || !p2Cam || !renderer) return;
             p1Cam.aspect = (window.innerWidth / 2) / window.innerHeight;
             p1Cam.updateProjectionMatrix();
             p2Cam.aspect = (window.innerWidth / 2) / window.innerHeight;
@@ -437,27 +689,23 @@
         }
 
         function animate() {
+            if (!gameRunning) return;
             requestAnimationFrame(animate);
             
             updatePlayers();
             updateBullets();
             updateCapture();
 
-            // Render Split Screen
-            // Player 1 Viewport (Left)
+            renderer.setScissorTest(true);
+
             renderer.setViewport(0, 0, window.innerWidth / 2, window.innerHeight);
             renderer.setScissor(0, 0, window.innerWidth / 2, window.innerHeight);
-            renderer.setScissorTest(true);
             renderer.render(scene, p1Cam);
 
-            // Player 2 Viewport (Right)
             renderer.setViewport(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
             renderer.setScissor(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
-            renderer.setScissorTest(true);
             renderer.render(scene, p2Cam);
         }
-
-        init();
     </script>
 </body>
 </html>
