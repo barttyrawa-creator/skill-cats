@@ -248,38 +248,42 @@
             }
         };
 
+        const PICKUP_WEAPONS = [
+            { name: 'Double Milk', damage: 15, reload: 500, range: 15, size: 0.2, speed: 1.5, count: 6, color: 0xffffff },
+            { name: 'Hyper Gatling', damage: 6, reload: 40, range: 30, size: 0.2, speed: 1.3, count: 1, color: 0xffff00 },
+            { name: 'Mega Launcher', damage: 60, reload: 1200, range: 60, size: 0.8, speed: 0.6, count: 1, color: 0x00ff00 }
+        ];
+
         const MAP_CONFIGS = {
             GARDEN: {
-                floor: 0x556b2f,
-                sky: 0x87ceeb,
+                floor: 0x556b2f, sky: 0x87ceeb,
                 obstacles: [
                     { type: 'box', pos: [10, 1, 10], size: [3, 2, 3], color: 0x228b22 },
                     { type: 'box', pos: [-10, 1, -10], size: [3, 2, 3], color: 0x228b22 },
                     { type: 'box', pos: [15, 1, -5], size: [2, 2, 2], color: 0x8b4513 },
-                    { type: 'box', pos: [-15, 1, 5], size: [2, 2, 2], color: 0x8b4513 },
-                    { type: 'cylinder', pos: [0, 1.5, 15], size: [1, 1, 3], color: 0x8b4513 },
-                    { type: 'cylinder', pos: [0, 1.5, -15], size: [1, 1, 3], color: 0x8b4513 }
+                    { type: 'cylinder', pos: [0, 2, 15], size: [0.5, 0.5, 4], color: 0x8b4513 }, // Tree
+                    { type: 'box', pos: [0, 4, 15], size: [4, 4, 4], color: 0x228b22 }, // Tree leaves
+                    { type: 'cylinder', pos: [-15, 0.5, -15], size: [2, 2, 1], color: 0x777777 } // Rock
                 ]
             },
             KITCHEN: {
-                floor: 0xcccccc,
-                sky: 0x444444,
+                floor: 0xcccccc, sky: 0x444444,
                 obstacles: [
-                    { type: 'box', pos: [0, 4, 15], size: [30, 8, 2], color: 0x888888 }, // Counter
-                    { type: 'box', pos: [0, 4, -15], size: [30, 8, 2], color: 0x888888 },
-                    { type: 'box', pos: [10, 1.5, 0], size: [4, 3, 4], color: 0xffffff }, // Fridge
-                    { type: 'box', pos: [-10, 1, 0], size: [5, 2, 8], color: 0x5d4037 }  // Table
+                    { type: 'box', pos: [0, 4, 15], size: [30, 8, 2], color: 0x888888 }, 
+                    { type: 'box', pos: [10, 1.5, 0], size: [4, 3, 4], color: 0xffffff },
+                    { type: 'box', pos: [-10, 1, 0], size: [5, 2, 8], color: 0x5d4037 },
+                    { type: 'box', pos: [-8, 2.5, 2], size: [1, 1, 1], color: 0xff4444 }, // Apple
+                    { type: 'box', pos: [-12, 2.5, -2], size: [1, 1, 1], color: 0xffff44 } // Banana
                 ]
             },
             ROOFTOPS: {
-                floor: 0x333333,
-                sky: 0x000011,
+                floor: 0x333333, sky: 0x000011,
                 obstacles: [
                     { type: 'box', pos: [0, 10, 0], size: [10, 20, 10], color: 0x222222 },
                     { type: 'box', pos: [20, 2, 20], size: [10, 4, 10], color: 0x444444 },
                     { type: 'box', pos: [-20, 2, -20], size: [10, 4, 10], color: 0x444444 },
-                    { type: 'box', pos: [20, 2, -20], size: [10, 4, 10], color: 0x444444 },
-                    { type: 'box', pos: [-20, 2, 20], size: [10, 4, 10], color: 0x444444 }
+                    { type: 'cylinder', pos: [18, 5, 18], size: [0.5, 0.5, 2], color: 0x888888 }, // Antenna
+                    { type: 'box', pos: [-18, 4.5, -18], size: [2, 1, 2], color: 0x111111 } // Vent
                 ]
             }
         };
@@ -294,6 +298,8 @@
         let gameRunning = false;
         let bullets = [];
         let obstacles = [];
+        let pickups = [];
+        let lastPickupSpawn = 0;
         let capturePoint = { x: 0, z: 0, radius: 5, progress: 0, owner: null, mesh: null };
         let scores = { p1: 0, p2: 0 };
         let floatingTexts = [];
@@ -524,6 +530,8 @@
             group.position.copy(pos);
             group.userData = { 
                 hp: 100, maxHp: 100, lastShot: 0, 
+                inventory: ['primary', 'melee'], // Array of weapon keys
+                weaponIndex: 0,
                 currentWeapon: 'primary',
                 velocity: new THREE.Vector3(),
                 knockback: new THREE.Vector3(),
@@ -533,6 +541,49 @@
                 crosshair: crosshair
             };
             return group;
+        }
+
+        function spawnWeaponPickup() {
+            const weapon = PICKUP_WEAPONS[Math.floor(Math.random() * PICKUP_WEAPONS.length)];
+            const pos = new THREE.Vector3((Math.random()-0.5)*40, 0.5, (Math.random()-0.5)*40);
+            
+            const geo = new THREE.BoxGeometry(1, 1, 1);
+            const mat = new THREE.MeshPhongMaterial({ color: weapon.color, emissive: weapon.color, emissiveIntensity: 0.5 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(pos);
+            scene.add(mesh);
+            
+            pickups.push({ mesh, weapon });
+            playSound('respawn', 0.2);
+        }
+
+        function updatePickups() {
+            const now = Date.now();
+            if (now - lastPickupSpawn > 10000 && pickups.length < 3) {
+                spawnWeaponPickup();
+                lastPickupSpawn = now;
+            }
+
+            for (let i = pickups.length - 1; i >= 0; i--) {
+                const p = pickups[i];
+                p.mesh.rotation.y += 0.05;
+                p.mesh.position.y = 0.5 + Math.sin(now * 0.005) * 0.2;
+
+                [player1, player2].forEach(player => {
+                    if (player.position.distanceTo(p.mesh.position) < 2) {
+                        // Pick up!
+                        player.userData.inventory[2] = p.weapon; // Slot 3 is for special
+                        player.userData.weaponIndex = 2; // Auto switch
+                        player.userData.currentWeapon = 'special';
+                        
+                        spawnOnomatopoeia("NEW WEAPON!", player.position, 0xffff00);
+                        playSound('respawn', 0.5);
+                        
+                        scene.remove(p.mesh);
+                        pickups.splice(i, 1);
+                    }
+                });
+            }
         }
 
         function applyClass(player, className) {
