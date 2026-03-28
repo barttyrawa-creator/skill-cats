@@ -145,6 +145,7 @@
 <body>
     <div id="ui">
         <div id="game-info">Objective: Capture the Milk Bowl!</div>
+        <div id="fps-counter" style="font-family:monospace; font-size: 0.8em; color: #0f0;">FPS: 60</div>
     </div>
 
     <div id="p1-hud" class="hud" style="display:none">
@@ -295,7 +296,13 @@
         let obstacles = [];
         let capturePoint = { x: 0, z: 0, radius: 5, progress: 0, owner: null, mesh: null };
         let scores = { p1: 0, p2: 0 };
+        let floatingTexts = [];
+        let textureCache = {}; // Cache for onomatopoeias to save performance
         
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fps = 0;
+
         const keys = {};
         window.onkeydown = (e) => keys[e.code] = true;
         window.onkeyup = (e) => keys[e.code] = false;
@@ -329,32 +336,33 @@
 
         // --- Game Logic ---
         function initGame() {
-            if (renderer) return; // Prevent multiple initializations
+            if (renderer) return;
 
             scene = new THREE.Scene();
             const config = MAP_CONFIGS[currentMap];
             scene.background = new THREE.Color(config.sky);
             if (currentMap === 'ROOFTOPS') scene.fog = new THREE.FogExp2(config.sky, 0.02);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            // OPTIMIZATION: Disable antialias for major FPS boost
+            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.type = THREE.BasicShadowMap; // Much faster than PCFSoft
             document.body.appendChild(renderer.domElement);
 
             // Lights
-            const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambient);
             const sun = new THREE.DirectionalLight(0xffffff, 1);
             sun.position.set(20, 50, 10);
             sun.castShadow = true;
-            sun.shadow.mapSize.width = 1024;
-            sun.shadow.mapSize.height = 1024;
+            sun.shadow.mapSize.width = 512; // Lower res for speed
+            sun.shadow.mapSize.height = 512;
             scene.add(sun);
 
-            // Environment
+            // Environment - Use MeshLambert or MeshPhong for speed
             const groundGeo = new THREE.PlaneGeometry(100, 100);
-            const groundMat = new THREE.MeshStandardMaterial({ color: config.floor, roughness: 0.8 });
+            const groundMat = new THREE.MeshPhongMaterial({ color: config.floor });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
             ground.receiveShadow = true;
@@ -365,15 +373,14 @@
             config.obstacles.forEach(obj => {
                 let geo;
                 if (obj.type === 'box') geo = new THREE.BoxGeometry(...obj.size);
-                else geo = new THREE.CylinderGeometry(obj.size[0], obj.size[1], obj.size[2], 16);
+                else geo = new THREE.CylinderGeometry(obj.size[0], obj.size[1], obj.size[2], 12); // Less segments
                 
-                const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: obj.color }));
+                const mesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color: obj.color }));
                 mesh.position.set(...obj.pos);
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
                 scene.add(mesh);
                 
-                // Add bounding box for collisions
                 mesh.geometry.computeBoundingBox();
                 const box = new THREE.Box3().setFromObject(mesh);
                 obstacles.push(box);
@@ -381,8 +388,8 @@
 
             // Capture Point
             if (currentGameMode === 'CONTROL_POINT') {
-                const bowlGeo = new THREE.CylinderGeometry(capturePoint.radius, capturePoint.radius, 0.2, 32);
-                const bowlMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, emissive: 0x333333 });
+                const bowlGeo = new THREE.CylinderGeometry(capturePoint.radius, capturePoint.radius, 0.2, 16);
+                const bowlMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, emissive: 0x222222 });
                 capturePoint.mesh = new THREE.Mesh(bowlGeo, bowlMat);
                 capturePoint.mesh.position.y = 0.1;
                 scene.add(capturePoint.mesh);
@@ -401,9 +408,8 @@
             applyClass(player1, p1Class);
             applyClass(player2, p2Class);
 
-            // Cameras
-            p1Cam = new THREE.PerspectiveCamera(75, (window.innerWidth/2) / window.innerHeight, 0.1, 1000);
-            p2Cam = new THREE.PerspectiveCamera(75, (window.innerWidth/2) / window.innerHeight, 0.1, 1000);
+            p1Cam = new THREE.PerspectiveCamera(75, (window.innerWidth/2) / window.innerHeight, 0.5, 200); // Tighter frustum
+            p2Cam = new THREE.PerspectiveCamera(75, (window.innerWidth/2) / window.innerHeight, 0.5, 200);
 
             window.addEventListener('resize', onWindowResize);
             animate();
@@ -411,7 +417,7 @@
 
         function createCat(color, pos) {
             const group = new THREE.Group();
-            const mat = new THREE.MeshStandardMaterial({ color: color });
+            const mat = new THREE.MeshPhongMaterial({ color: color });
             
             // Body
             const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 1.8), mat);
@@ -425,8 +431,8 @@
             head.castShadow = true;
             group.add(head);
 
-            // Ears
-            const earGeo = new THREE.ConeGeometry(0.2, 0.4, 4);
+            // Ears - simpler geometry
+            const earGeo = new THREE.ConeGeometry(0.2, 0.4, 3);
             const earL = new THREE.Mesh(earGeo, mat);
             earL.position.set(0.25, 2.0, 0.7);
             group.add(earL);
@@ -445,6 +451,8 @@
                 hp: 100, maxHp: 100, lastShot: 0, 
                 currentWeapon: 'primary',
                 velocity: new THREE.Vector3(),
+                knockback: new THREE.Vector3(),
+                shake: 0,
                 box: new THREE.Box3()
             };
             return group;
@@ -464,13 +472,71 @@
         function updateHUD(player) {
             const prefix = player === player1 ? 'p1' : 'p2';
             const percent = (player.userData.hp / player.userData.maxHp) * 100;
-            document.getElementById(`${prefix}-hp-bar`).style.width = `${Math.max(0, percent)}%`;
+            const bar = document.getElementById(`${prefix}-hp-bar`);
+            bar.style.width = `${Math.max(0, percent)}%`;
             
+            // Color feedback based on health
+            if (percent > 60) bar.style.background = 'linear-gradient(90deg, #44ff44, #88ff88)';
+            else if (percent > 30) bar.style.background = 'linear-gradient(90deg, #ffff44, #ffff88)';
+            else bar.style.background = 'linear-gradient(90deg, #ff4444, #ff8888)';
+
             const stats = CLASSES[player.userData.class];
             const weapon = stats[player.userData.currentWeapon];
             document.getElementById(`${prefix}-weapon`).innerText = weapon.name;
             document.getElementById(`${prefix}-score`).innerText = scores[prefix];
         }
+
+        function spawnOnomatopoeia(text, pos, color = 0xffffff) {
+            const key = `${text}-${color}`;
+            let texture;
+            
+            if (textureCache[key]) {
+                texture = textureCache[key];
+            } else {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 256;
+                canvas.height = 128;
+                
+                ctx.font = 'bold 64px "Segoe UI"';
+                ctx.fillStyle = '#' + new THREE.Color(color).getHexString();
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 4;
+                ctx.textAlign = 'center';
+                ctx.strokeText(text, 128, 80);
+                ctx.fillText(text, 128, 80);
+
+                texture = new THREE.CanvasTexture(canvas);
+                textureCache[key] = texture; // Cache it!
+            }
+
+            const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(mat);
+            sprite.position.copy(pos).add(new THREE.Vector3(0, 2, 0));
+            sprite.scale.set(3, 1.5, 1);
+            
+            scene.add(sprite);
+            floatingTexts.push({ sprite, life: 1.0 });
+        }
+
+        function updateOnomatopoeias() {
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const ft = floatingTexts[i];
+                ft.life -= 0.02;
+                ft.sprite.position.y += 0.03; // Float slower
+                ft.sprite.material.opacity = ft.life;
+                
+                if (ft.life <= 0) {
+                    scene.remove(ft.sprite);
+                    // Don't dispose texture, it's in cache!
+                    floatingTexts.splice(i, 1);
+                }
+            }
+        }
+
+        const p1BulletMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+        const p2BulletMat = new THREE.MeshBasicMaterial({ color: 0x4444ff });
+        const projectileBox = new THREE.Box3(); 
 
         function shoot(player) {
             const stats = CLASSES[player.userData.class];
@@ -480,18 +546,32 @@
             if (now - player.userData.lastShot < weapon.reload) return;
             player.userData.lastShot = now;
 
+            // Screen shake for shooter
+            player.userData.shake = weapon.damage * 0.05;
+
+            // Onomatopoeia based on weapon (Optimized)
+            let sound = "PEW!";
+            if (player.userData.class === 'SNIPER') sound = "BOOM!";
+            if (player.userData.class === 'HEAVY') sound = "RAT-TAT!";
+            if (player.userData.class === 'SOLDIER') sound = "KABLAM!";
+            if (player.userData.currentWeapon === 'melee') sound = "SLASH!";
+            spawnOnomatopoeia(sound, player.position, player === player1 ? 0xffaa00 : 0xcccccc);
+
             if (player.userData.currentWeapon === 'melee') {
                 checkMeleeHit(player, weapon);
                 return;
             }
 
+            // Procedural Muzzle Flash (No Shadows for performance)
+            const flash = new THREE.PointLight(0xffcc00, 3, 4);
+            flash.position.copy(player.position).add(new THREE.Vector3(0, 1.2, 1).applyQuaternion(player.quaternion));
+            scene.add(flash);
+            setTimeout(() => scene.remove(flash), 50);
+
             for(let i=0; i < (weapon.count || 1); i++) {
                 const yarn = new THREE.Mesh(
-                    new THREE.SphereGeometry(weapon.size, 8, 8),
-                    new THREE.MeshStandardMaterial({ 
-                        color: player === player1 ? 0xff4444 : 0x4444ff, 
-                        emissive: player === player1 ? 0x220000 : 0x000022 
-                    })
+                    new THREE.SphereGeometry(weapon.size, 6, 6),
+                    player === player1 ? p1BulletMat : p2BulletMat
                 );
                 yarn.position.copy(player.position).add(new THREE.Vector3(0, 1.2, 0.5).applyQuaternion(player.quaternion));
                 
@@ -537,6 +617,8 @@
         function handleKill(attacker, victim) {
             const prefix = attacker === player1 ? 'p1' : 'p2';
             scores[prefix]++;
+            spawnOnomatopoeia("MEOW!", victim.position, 0xff0000); // Visual death sound
+            
             if (currentGameMode === 'DEATHMATCH' && scores[prefix] >= 10) {
                 alert(`PLAYER ${prefix === 'p1' ? '1' : '2'} WINS!`);
                 location.reload();
@@ -562,6 +644,7 @@
                 
                 let moveZ = 0;
                 
+                // P1 Controls
                 if (p === player1) {
                     if (keys['KeyW']) moveZ += moveSpeed;
                     if (keys['KeyS']) moveZ -= moveSpeed;
@@ -569,7 +652,9 @@
                     if (keys['KeyD']) p.rotation.y -= 0.06;
                     if (keys['KeyF']) shoot(p);
                     if (keys['KeyG']) p.userData.currentWeapon = p.userData.currentWeapon === 'primary' ? 'melee' : 'primary';
-                } else {
+                } 
+                // P2 Controls
+                else {
                     if (keys['ArrowUp']) moveZ += moveSpeed;
                     if (keys['ArrowDown']) moveZ -= moveSpeed;
                     if (keys['ArrowLeft']) p.rotation.y += 0.06;
@@ -578,10 +663,18 @@
                     if (keys['KeyK']) p.userData.currentWeapon = p.userData.currentWeapon === 'primary' ? 'melee' : 'primary';
                 }
 
-                if (moveZ !== 0) {
+                // Apply Movement + Knockback
+                if (moveZ !== 0 || p.userData.knockback.length() > 0.01) {
                     const oldPos = p.position.clone();
+                    
+                    // Normal movement
                     p.translateZ(moveZ);
                     
+                    // Knockback decay and application
+                    p.position.add(p.userData.knockback);
+                    p.userData.knockback.multiplyScalar(0.9); // Friction
+
+                    // Collision check
                     p.userData.box.setFromObject(p);
                     let collided = false;
                     for(let box of obstacles) {
@@ -592,8 +685,12 @@
                     }
                     if (collided) p.position.copy(oldPos);
 
-                    p.children[0].position.y = 1.4 + Math.sin(Date.now() * 0.01) * 0.05;
+                    // Animation bobbing
+                    p.children[0].position.y = 0.8 + Math.sin(Date.now() * 0.01) * 0.1;
                 }
+
+                // Decay screen shake
+                if (p.userData.shake > 0) p.userData.shake *= 0.9;
 
                 if (currentMap === 'ROOFTOPS' && p.position.y < -5) respawn(p);
                 
@@ -607,7 +704,17 @@
         function updateCamera(cam, player) {
             const offset = new THREE.Vector3(0, 4, -8);
             offset.applyQuaternion(player.quaternion);
-            cam.position.lerp(player.position.clone().add(offset), 0.1);
+            
+            const targetPos = player.position.clone().add(offset);
+            
+            // Apply Screen Shake
+            if (player.userData.shake > 0.01) {
+                targetPos.x += (Math.random() - 0.5) * player.userData.shake;
+                targetPos.y += (Math.random() - 0.5) * player.userData.shake;
+                targetPos.z += (Math.random() - 0.5) * player.userData.shake;
+            }
+
+            cam.position.lerp(targetPos, 0.1);
             cam.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
         }
 
@@ -618,9 +725,11 @@
                 b.mesh.position.addScaledVector(b.dir, b.weapon.speed);
 
                 let hitObstacle = false;
-                const bulletBox = new THREE.Box3().setFromObject(b.mesh);
+                
+                // Optimized collision
+                projectileBox.setFromObject(b.mesh);
                 for(let box of obstacles) {
-                    if (bulletBox.intersectsBox(box)) {
+                    if (projectileBox.intersectsBox(box)) {
                         hitObstacle = true;
                         break;
                     }
@@ -629,9 +738,13 @@
                 const target = b.owner === player1 ? player2 : player1;
                 const dist = b.mesh.position.distanceTo(target.position.clone().add(new THREE.Vector3(0,1,0)));
                 
-                if (dist < 1.5 || hitObstacle) {
-                    if (dist < 1.5) {
+                if (dist < 1.6 || hitObstacle) {
+                    if (dist < 1.6) {
                         target.userData.hp -= b.weapon.damage;
+                        const kbDir = b.dir.clone().multiplyScalar(b.weapon.damage * 0.015);
+                        target.userData.knockback.add(kbDir);
+                        target.userData.shake = b.weapon.damage * 0.1;
+
                         spawnHitEffect(target.position);
                         if (target.userData.hp <= 0) handleKill(b.owner, target);
                         updateHUD(target);
@@ -640,7 +753,7 @@
                     continue;
                 }
 
-                if (now - b.birth > 3000) removeBullet(i);
+                if (now - b.birth > 2500) removeBullet(i);
             }
         }
 
@@ -692,9 +805,20 @@
             if (!gameRunning) return;
             requestAnimationFrame(animate);
             
+            // FPS Counter Logic
+            const now = performance.now();
+            frameCount++;
+            if (now >= lastTime + 1000) {
+                fps = Math.round((frameCount * 1000) / (now - lastTime));
+                document.getElementById('fps-counter').innerText = `FPS: ${fps}`;
+                frameCount = 0;
+                lastTime = now;
+            }
+
             updatePlayers();
             updateBullets();
             updateCapture();
+            updateOnomatopoeias();
 
             renderer.setScissorTest(true);
 
