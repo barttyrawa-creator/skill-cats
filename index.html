@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Fortress 2 - Split Screen</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #222; }
+        canvas { display: block; }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            pointer-events: none;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        .hud {
+            position: absolute;
+            bottom: 20px;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            border: 2px solid #555;
+        }
+        #p1-hud { left: 20px; border-color: #ff4444; }
+        #p2-hud { right: 20px; border-color: #4444ff; }
+        #capture-status {
+            background: rgba(0,0,0,0.8);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 1.2em;
+        }
+        .controls-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 20;
+        }
+        .split-line {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: #333;
+            transform: translateX(-50%);
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div id="capture-status">Capture Point: Neutral</div>
+    </div>
+
+    <div id="p1-hud" class="hud">P1: GINGER CAT (WASD + F to Shoot)<br>HP: <span id="p1-hp">100</span></div>
+    <div id="p2-hud" class="hud">P2: TABBY CAT (ARROWS + L to Shoot)<br>HP: <span id="p2-hp">100</span></div>
+
+    <div id="start-screen" class="controls-hint">
+        <h1>CAT FORTRESS 2</h1>
+        <p>Local Split-Screen Mayhem!</p>
+        <div style="display:flex; gap:40px; justify-content:center;">
+            <div>
+                <h3 style="color:#ff4444">Player 1 (Ginger)</h3>
+                Move: WASD<br>Shoot Yarn: F
+            </div>
+            <div>
+                <h3 style="color:#4444ff">Player 2 (Tabby)</h3>
+                Move: ARROWS<br>Shoot Yarn: L
+            </div>
+        </div>
+        <p style="margin-top:20px;">Stand on the Central Bowl to capture!</p>
+        <button onclick="startGame()" style="padding:10px 20px; cursor:pointer; font-size:1.1em; background:#4CAF50; color:white; border:none; border-radius:5px;">START MEOW!</button>
+    </div>
+
+    <div class="split-line"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- Game Config ---
+        const P1_COLOR = 0xffa500; // Ginger
+        const P2_COLOR = 0x888888; // Tabby
+        const MOVE_SPEED = 0.15;
+        const ROTATE_SPEED = 0.05;
+        const BULLET_SPEED = 0.4;
+        const FIRE_RATE = 500; // ms
+
+        let scene, renderer;
+        let player1, player2;
+        let p1Cam, p2Cam;
+        let bullets = [];
+        let capturePoint = { x: 0, z: 0, radius: 4, progress: 0, owner: null };
+        let clock = new THREE.Clock();
+        let gameRunning = false;
+
+        const keys = {};
+        window.onkeydown = (e) => keys[e.code] = true;
+        window.onkeyup = (e) => keys[e.code] = false;
+
+        window.startGame = () => {
+            document.getElementById('start-screen').style.display = 'none';
+            gameRunning = true;
+        };
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb); // Sky blue
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            sun.position.set(10, 20, 10);
+            sun.castShadow = true;
+            scene.add(sun);
+
+            // Ground (The Living Room Carpet)
+            const groundGeo = new THREE.PlaneGeometry(100, 100);
+            const groundMat = new THREE.MeshPhongMaterial({ color: 0x556b2f }); // Grass-like
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Simple Obstacles (Boxes)
+            for(let i=0; i<10; i++) {
+                const box = new THREE.Mesh(
+                    new THREE.BoxGeometry(2, 2, 2),
+                    new THREE.MeshPhongMaterial({ color: 0x8b4513 })
+                );
+                box.position.set(Math.random()*40-20, 1, Math.random()*40-20);
+                box.castShadow = true;
+                box.receiveShadow = true;
+                scene.add(box);
+            }
+
+            // Capture Point (The Milk Bowl)
+            const bowlGeo = new THREE.CylinderGeometry(capturePoint.radius, capturePoint.radius, 0.2, 32);
+            const bowlMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+            const bowl = new THREE.Mesh(bowlGeo, bowlMat);
+            bowl.position.y = 0.05;
+            scene.add(bowl);
+
+            // Players
+            player1 = createCat(P1_COLOR, new THREE.Vector3(-10, 0, 0));
+            player2 = createCat(P2_COLOR, new THREE.Vector3(10, 0, 0));
+            player2.rotation.y = Math.PI;
+
+            scene.add(player1);
+            scene.add(player2);
+
+            // Cameras
+            p1Cam = new THREE.PerspectiveCamera(75, (window.innerWidth/2) / window.innerHeight, 0.1, 1000);
+            p2Cam = new THREE.PerspectiveCamera(75, (window.innerWidth/2) / window.innerHeight, 0.1, 1000);
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function createCat(color, pos) {
+            const group = new THREE.Group();
+            
+            // Body
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1.5),
+                new THREE.MeshPhongMaterial({ color: color })
+            );
+            body.position.y = 0.6;
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const head = new THREE.Mesh(
+                new THREE.BoxGeometry(0.8, 0.8, 0.8),
+                new THREE.MeshPhongMaterial({ color: color })
+            );
+            head.position.set(0, 1.2, 0.6);
+            head.castShadow = true;
+            group.add(head);
+
+            // Ears
+            const earGeo = new THREE.ConeGeometry(0.2, 0.3, 3);
+            const earL = new THREE.Mesh(earGeo, new THREE.MeshPhongMaterial({ color: color }));
+            earL.position.set(0.2, 1.7, 0.6);
+            group.add(earL);
+            const earR = earL.clone();
+            earR.position.x = -0.2;
+            group.add(earR);
+
+            group.position.copy(pos);
+            group.userData = { 
+                hp: 100, 
+                lastShot: 0, 
+                team: color === P1_COLOR ? 'Ginger' : 'Tabby' 
+            };
+            return group;
+        }
+
+        function shoot(player) {
+            const now = Date.now();
+            if (now - player.userData.lastShot < FIRE_RATE) return;
+            player.userData.lastShot = now;
+
+            const yarn = new THREE.Mesh(
+                new THREE.SphereGeometry(0.2, 8, 8),
+                new THREE.MeshPhongMaterial({ color: player === player1 ? 0xff0000 : 0x0000ff })
+            );
+            yarn.position.copy(player.position);
+            yarn.position.y = 1;
+            
+            const direction = new THREE.Vector3(0, 0, 1);
+            direction.applyQuaternion(player.quaternion);
+            
+            bullets.push({
+                mesh: yarn,
+                dir: direction,
+                owner: player
+            });
+            scene.add(yarn);
+        }
+
+        function updatePlayers() {
+            if (!gameRunning) return;
+
+            // P1 Controls (WASD + F)
+            if (keys['KeyW']) player1.translateZ(MOVE_SPEED);
+            if (keys['KeyS']) player1.translateZ(-MOVE_SPEED);
+            if (keys['KeyA']) player1.rotation.y += ROTATE_SPEED;
+            if (keys['KeyD']) player1.rotation.y -= ROTATE_SPEED;
+            if (keys['KeyF']) shoot(player1);
+
+            // P2 Controls (Arrows + L)
+            if (keys['ArrowUp']) player2.translateZ(MOVE_SPEED);
+            if (keys['ArrowDown']) player2.translateZ(-MOVE_SPEED);
+            if (keys['ArrowLeft']) player2.rotation.y += ROTATE_SPEED;
+            if (keys['ArrowRight']) player2.rotation.y -= ROTATE_SPEED;
+            if (keys['KeyL']) shoot(player2);
+
+            // Keep in bounds
+            [player1, player2].forEach(p => {
+                p.position.x = Math.max(-45, Math.min(45, p.position.x));
+                p.position.z = Math.max(-45, Math.min(45, p.position.z));
+            });
+
+            // Camera follow
+            updateCamera(p1Cam, player1);
+            updateCamera(p2Cam, player2);
+        }
+
+        function updateCamera(cam, player) {
+            const offset = new THREE.Vector3(0, 3, -6);
+            offset.applyQuaternion(player.quaternion);
+            cam.position.copy(player.position).add(offset);
+            cam.lookAt(player.position.x, player.position.y + 1, player.position.z);
+        }
+
+        function updateBullets() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.mesh.position.addScaledVector(b.dir, BULLET_SPEED);
+
+                // Collision with other player
+                const target = b.owner === player1 ? player2 : player1;
+                const dist = b.mesh.position.distanceTo(target.position);
+                
+                if (dist < 1.5) {
+                    target.userData.hp -= 10;
+                    document.getElementById(target === player1 ? 'p1-hp' : 'p2-hp').innerText = target.userData.hp;
+                    if (target.userData.hp <= 0) respawn(target);
+                    removeBullet(i);
+                    continue;
+                }
+
+                // Range limit
+                if (b.mesh.position.length() > 100) {
+                    removeBullet(i);
+                }
+            }
+        }
+
+        function removeBullet(index) {
+            scene.remove(bullets[index].mesh);
+            bullets.splice(index, 1);
+        }
+
+        function respawn(player) {
+            player.userData.hp = 100;
+            player.position.set(player === player1 ? -20 : 20, 0, Math.random()*10-5);
+            document.getElementById(player === player1 ? 'p1-hp' : 'p2-hp').innerText = 100;
+        }
+
+        function updateCapture() {
+            let p1In = player1.position.distanceTo(new THREE.Vector3(0,0,0)) < capturePoint.radius;
+            let p2In = player2.position.distanceTo(new THREE.Vector3(0,0,0)) < capturePoint.radius;
+
+            const statusEl = document.getElementById('capture-status');
+
+            if (p1In && !p2In) {
+                capturePoint.progress += 0.01;
+                if (capturePoint.progress >= 1) {
+                    capturePoint.owner = 'Ginger';
+                    statusEl.style.color = '#ffaa00';
+                    statusEl.innerText = "Captured by GINGER!";
+                }
+            } else if (p2In && !p1In) {
+                capturePoint.progress -= 0.01;
+                if (capturePoint.progress <= -1) {
+                    capturePoint.owner = 'Tabby';
+                    statusEl.style.color = '#aaaaaa';
+                    statusEl.innerText = "Captured by TABBY!";
+                }
+            }
+            
+            if (capturePoint.owner === null) {
+                const percent = Math.abs(Math.round(capturePoint.progress * 100));
+                statusEl.innerText = `Capture Point: ${percent}% ${capturePoint.progress > 0 ? 'Ginger' : 'Tabby'}`;
+            }
+        }
+
+        function onWindowResize() {
+            p1Cam.aspect = (window.innerWidth / 2) / window.innerHeight;
+            p1Cam.updateProjectionMatrix();
+            p2Cam.aspect = (window.innerWidth / 2) / window.innerHeight;
+            p2Cam.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updatePlayers();
+            updateBullets();
+            updateCapture();
+
+            // Render Split Screen
+            // Player 1 Viewport (Left)
+            renderer.setViewport(0, 0, window.innerWidth / 2, window.innerHeight);
+            renderer.setScissor(0, 0, window.innerWidth / 2, window.innerHeight);
+            renderer.setScissorTest(true);
+            renderer.render(scene, p1Cam);
+
+            // Player 2 Viewport (Right)
+            renderer.setViewport(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
+            renderer.setScissor(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
+            renderer.setScissorTest(true);
+            renderer.render(scene, p2Cam);
+        }
+
+        init();
+    </script>
+</body>
+</html>
