@@ -103,18 +103,22 @@
         // --- Game Config ---
         const P1_COLOR = 0xffa500; // Ginger
         const P2_COLOR = 0x888888; // Tabby
-        const MOVE_SPEED = 0.15;
-        const ROTATE_SPEED = 0.05;
-        const BULLET_SPEED = 0.4;
-        const FIRE_RATE = 500; // ms
+        const MOVE_SPEED = 0.25; // Faster movement
+        const ROTATE_SPEED = 0.07; // Snappier rotation
+        const BULLET_SPEED = 0.8; // Faster projectiles
+        const FIRE_RATE = 300; // Faster shooting
 
         let scene, renderer;
         let player1, player2;
         let p1Cam, p2Cam;
         let bullets = [];
         let capturePoint = { x: 0, z: 0, radius: 4, progress: 0, owner: null };
-        let clock = new THREE.Clock();
         let gameRunning = false;
+
+        // Optimized Geometries & Materials (Pre-created for reuse)
+        const bulletGeo = new THREE.SphereGeometry(0.2, 8, 8);
+        const p1BulletMat = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+        const p2BulletMat = new THREE.MeshPhongMaterial({ color: 0x0000ff });
 
         const keys = {};
         window.onkeydown = (e) => keys[e.code] = true;
@@ -127,35 +131,38 @@
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87ceeb); // Sky blue
+            scene.background = new THREE.Color(0x87ceeb);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.BasicShadowMap; // Faster shadows
             document.body.appendChild(renderer.domElement);
 
             // Lights
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
+            
             const sun = new THREE.DirectionalLight(0xffffff, 0.8);
             sun.position.set(10, 20, 10);
             sun.castShadow = true;
+            sun.shadow.mapSize.width = 512; // Lower res for speed
+            sun.shadow.mapSize.height = 512;
             scene.add(sun);
 
-            // Ground (The Living Room Carpet)
+            // Ground
             const groundGeo = new THREE.PlaneGeometry(100, 100);
-            const groundMat = new THREE.MeshPhongMaterial({ color: 0x556b2f }); // Grass-like
+            const groundMat = new THREE.MeshLambertMaterial({ color: 0x556b2f }); // Faster material
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
             ground.receiveShadow = true;
             scene.add(ground);
 
-            // Simple Obstacles (Boxes)
-            for(let i=0; i<10; i++) {
-                const box = new THREE.Mesh(
-                    new THREE.BoxGeometry(2, 2, 2),
-                    new THREE.MeshPhongMaterial({ color: 0x8b4513 })
-                );
+            // Simple Obstacles
+            const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+            const boxMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+            for(let i=0; i<12; i++) {
+                const box = new THREE.Mesh(boxGeo, boxMat);
                 box.position.set(Math.random()*40-20, 1, Math.random()*40-20);
                 box.castShadow = true;
                 box.receiveShadow = true;
@@ -230,8 +237,8 @@
             player.userData.lastShot = now;
 
             const yarn = new THREE.Mesh(
-                new THREE.SphereGeometry(0.2, 8, 8),
-                new THREE.MeshPhongMaterial({ color: player === player1 ? 0xff0000 : 0x0000ff })
+                bulletGeo,
+                player === player1 ? p1BulletMat : p2BulletMat
             );
             yarn.position.copy(player.position);
             yarn.position.y = 1;
